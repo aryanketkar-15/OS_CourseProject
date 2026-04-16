@@ -1,0 +1,69 @@
+
+**** Opcode error : ****
+**** Program terminated abnormally. ****
+SI = 0  TI =0  PI=1
+TTC = 0  LLC=0
+
+-----------------------------------------------------------------------------------
+
+program terminated normally
+
+-----------------------------------------------------------------------------------
+
+program terminated normally
+EDI Group
+-----------------------------------------------------------------------------------
+
+program terminated normally
+EDI Group
+-----------------------------------------------------------------------------------
+
+program terminated normally
+Aryan Ketkar
+-----------------------------------------------------------------------------------
+
+program terminated normally
+
+SI = 3  TI =0  PI=0
+TTC = 7  LLC=3
+
+**** Operand error : ****
+**** Program terminated abnormally. ****
+SI = 3  TI =0  PI=2
+TTC = 7  LLC=3
+
+SI = 3  TI =0  PI=2
+TTC = 7  LLC=3
+
+**** Operand error : ****
+**** Program terminated abnormally. ****
+SI = 3  TI =0  PI=2
+TTC = 7  LLC=3
+
+SI = 3  TI =0  PI=2
+TTC = 7  LLC=3
+
+**** Operand error : ****
+**** Program terminated abnormally. ****
+SI = 3  TI =0  PI=2
+TTC = 7  LLC=3
+
+SI = 3  TI =0  PI=2
+TTC = 7  LLC=3
+NOT SAME
+-----------------------------------------------------------------------------------
+
+program terminated normally
+NOT SAME
+-----------------------------------------------------------------------------------
+
+program terminated normally
+
+**** Operand error : ****
+**** Program terminated abnormally. ****
+SI = 2  TI =0  PI=2
+TTC = 9  LLC=1
+
+-----------------------------------------------------------------------------------
+
+program terminated normally
