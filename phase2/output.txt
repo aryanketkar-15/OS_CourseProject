@@ -1,69 +1,45 @@
 
-**** Opcode error : ****
-**** Program terminated abnormally. ****
-SI = 0  TI =0  PI=1
-TTC = 0  LLC=0
+JOB ID: 0001 - INVALID PAGE FAULT
+IC: 01  IR: GS20  TTC: 1  LLC: 0
 
------------------------------------------------------------------------------------
 
-program terminated normally
+NOT SAME                                
 
------------------------------------------------------------------------------------
+JOB ID: 0002 - NO ERROR
+IC: 09  IR: H     TTC: 13  LLC: 1
 
-program terminated normally
-EDI Group
------------------------------------------------------------------------------------
 
-program terminated normally
-EDI Group
------------------------------------------------------------------------------------
 
-program terminated normally
-Aryan Ketkar
------------------------------------------------------------------------------------
+JOB ID: 0003 - LINE LIMIT EXCEEDED
+IC: 02  IR: PD10  TTC: 3  LLC: 1
 
-program terminated normally
 
-SI = 3  TI =0  PI=0
-TTC = 7  LLC=3
+$                                       
+$   $                                   
+$   $   $                               
 
-**** Operand error : ****
-**** Program terminated abnormally. ****
-SI = 3  TI =0  PI=2
-TTC = 7  LLC=3
+JOB ID: 0004 - TIME LIMIT EXCEEDED
+IC: 12  IR: SR51  TTC: 16  LLC: 3
 
-SI = 3  TI =0  PI=2
-TTC = 7  LLC=3
 
-**** Operand error : ****
-**** Program terminated abnormally. ****
-SI = 3  TI =0  PI=2
-TTC = 7  LLC=3
 
-SI = 3  TI =0  PI=2
-TTC = 7  LLC=3
+JOB ID: 0005 - OPERAND ERROR
+IC: 02  IR: 9PD2  TTC: 3  LLC: 0
 
-**** Operand error : ****
-**** Program terminated abnormally. ****
-SI = 3  TI =0  PI=2
-TTC = 7  LLC=3
 
-SI = 3  TI =0  PI=2
-TTC = 7  LLC=3
-NOT SAME
------------------------------------------------------------------------------------
 
-program terminated normally
-NOT SAME
------------------------------------------------------------------------------------
+JOB ID: 0006 - OUT OF DATA
+IC: 01  IR: GD20  TTC: 2  LLC: 0
 
-program terminated normally
 
-**** Operand error : ****
-**** Program terminated abnormally. ****
-SI = 2  TI =0  PI=2
-TTC = 9  LLC=1
+VALID FLT OK                            
 
------------------------------------------------------------------------------------
+JOB ID: 0007 - NO ERROR
+IC: 03  IR: H     TTC: 4  LLC: 1
 
-program terminated normally
+
+
+JOB ID: 0008 - OPERATION CODE ERROR
+IC: 01  IR: OP00  TTC: 1  LLC: 0
+
+

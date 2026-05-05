@@ -1,489 +1,445 @@
-#include<stdio.h>
-#include<stdlib.h>
-#include<iostream>
-#include<fstream>
-#include<string.h>
+#include <iostream>
+#include <fstream>
+#include <cstring>
+#include <string>
 
 using namespace std;
-int IC,PTR,VA,RA,kio=-1,flag[30],PI,TI,SI,TTC=0,LLC=0;
-char M[300][4],IR[4],R[4],C;
-char page[10][4];
-fstream fin,fout;
-char temp[100];
-string line;
+
+#include <vector>
+#include <algorithm>
+#include <ctime>
+#include <iomanip>
+
+
+// Phase 2 Registers and Counters
+char IR[4];
+char R[4];
+int  IC;
+bool C;
+int  SI;
+int  PI;
+int  TI;
+int  PTR; // Page Table Register
+bool terminateFlag; // To signal job termination
+
+struct PCB {
+    int jobID;
+    int TTL; // Total Time Limit
+    int TLL; // Total Line Limit
+    int TTC; // Total Time Counter
+    int LLC; // Line Limit Counter
+} pcb;
+const int MEM_SIZE  = 300;
+const int WORD_SIZE = 4;
+
+class Memory {
+private:
+    char memory[MEM_SIZE][WORD_SIZE];
+
+public:
+    Memory() { initialize(); }
+
+    void initialize() {
+        for (int i = 0; i < MEM_SIZE; ++i)
+            for (int j = 0; j < WORD_SIZE; ++j)
+                memory[i][j] = ' ';
+    }
+
+    void read(int address, char* buffer) {
+        if (address < 0 || address >= MEM_SIZE) {
+            cerr << "Memory READ error: address " << address << " out of bounds." << endl;
+            return;
+        }
+        for (int i = 0; i < WORD_SIZE; ++i)
+            buffer[i] = memory[address][i];
+    }
+
+    void write(int address, const char* data) {
+        if (address < 0 || address >= MEM_SIZE) {
+            cerr << "Memory WRITE error: address " << address << " out of bounds." << endl;
+            return;
+        }
+        for (int i = 0; i < WORD_SIZE; ++i)
+            memory[address][i] = data[i];
+    }
+
+    void displayMemory() {
+        cout << "\n--- Memory  (300 words) ---" << endl;
+        for (int i = 0; i < MEM_SIZE; ++i) {
+            cout << setw(3) << setfill('0') << i << ": ";
+            for (int j = 0; j < WORD_SIZE; ++j)
+                cout << "[" << memory[i][j] << "]";
+            cout << endl;
+        }
+        cout << "-------------------------------\n" << endl;
+    }
+};
+
+Memory M;
+bool blockUsed[30]; // To track allocated blocks (30 blocks of 10 words each)
+ifstream inputFile;
+ofstream outputFile;
+bool debug = true;
+
+// Prototypes
+void LOAD();
+void STARTEXECUTION();
+void EXECUTEUSERPROGRAM();
 void MOS();
+int  ADDRESSMAP(int VA);
+int  ALLOCATE();
+void TERMINATE(int EM, int EM2 = -1);
 
-struct PCB
-{
-    char job[4],TTL[4],TLL[4];
-}pcb;
-
-int ttl,tll;
-
-
-void endprogram()
-{
-    fout<<"\nSI = "<<SI<<"  TI ="<<TI<<"  PI="<<PI<<endl;
-        fout<<"TTC = "<<TTC<<"  LLC="<<LLC<<endl;
-            cout<<"\nSI = "<<SI<<"  TI ="<<TI<<"  PI="<<PI<<endl;
-        cout<<"TTC = "<<TTC<<"  LLC="<<LLC<<endl;
+// Restore Random Allocation for Phase 2
+int ALLOCATE() {
+    int block;
+    do {
+        block = rand() % 30;
+    } while (blockUsed[block]);
+    blockUsed[block] = true;
+    return block;
 }
 
-void allocate()
-{
+// Map Virtual Address (VA) to Real Address (RA)
+// Returns real address or sets PI/returns -1 on error
+int ADDRESSMAP(int VA) {
+    if (VA < 0 || VA >= 100) {
+        PI = 2; // Operand Error
+        return -1;
+    }
 
-    int pos,i,j,k=0,check=0,len;
-    char str[2];
-    int level=0;
+    int pageNum = VA / 10;
+    int offset = VA % 10;
 
-    while(check!=1)
-    {
-        cout<<"TEMP  "<<kio<<endl;
-        kio++;
+    // Read Page Table Entry from memory
+    // Page table is stored at block PTR*10
+    char pte[4];
+    M.read(PTR * 10 + pageNum, pte);
 
-        cout<<"Cnt1  "<<level<<endl;
-        pos=(rand()%29)*10;
-        cout<<"Pos1   "<<pos<<endl;
-        while(flag[pos/10] != 0 )
-        {
-        cout<<"In while pos"<<endl;
-        pos=(rand()%29)*10;
-        cout<<"Pos2  "<<pos<<endl;
-        cout<<"cnt2  "<<level<<endl;
+    if (pte[0] == '*') {
+        PI = 3; // Page Fault
+        return -1;
+    }
+
+    // Convert PTE (stored as characters) to integer block number
+    int block = (pte[2] - '0') * 10 + (pte[3] - '0');
+    return block * 10 + offset;
+}
+
+// Strip trailing \r from lines (Windows line endings)
+string stripCR(const string& s) {
+    if (!s.empty() && s.back() == '\r')
+        return s.substr(0, s.length() - 1);
+    return s;
+}
+
+// Extract 2-digit operand from IR[2] and IR[3]
+int getAddress() {
+    if (!isdigit(IR[2]) || !isdigit(IR[3])) {
+        PI = 2; // Operand Error
+        return -1;
+    }
+    return (IR[2] - '0') * 10 + (IR[3] - '0');
+}
+
+// SI=1 : Read data card into memory (at mapped real address)
+void READ() {
+    string line;
+    if (!getline(inputFile, line)) return;
+    line = stripCR(line);
+
+    if (line.substr(0, 4) == "$END") {
+        TERMINATE(1); // Out of Data
+        return;
+    }
+
+    int addr = getAddress();
+    int ra = ADDRESSMAP(addr);
+    
+    if (ra == -1) return; // PI already set (should be handled in MOS)
+
+    while ((int)line.length() < 40) line += ' ';
+
+    for (int i = 0; i < 10; ++i) {
+        char word[4];
+        for (int j = 0; j < 4; ++j)
+            word[j] = line[i * 4 + j];
+        M.write(ra + i, word);
+    }
+}
+
+// SI=2 : Write 10 words from memory to output file
+void WRITE() {
+    pcb.LLC++;
+    if (pcb.LLC > pcb.TLL) {
+        TERMINATE(2); // Line Limit Exceeded
+        return;
+    }
+
+    int addr = getAddress();
+    int ra = ADDRESSMAP(addr);
+    if (ra == -1) return; // PI already set (Operand Error or Page Fault)
+
+    for (int i = 0; i < 10; ++i) {
+        char word[4];
+        M.read(ra + i, word);
+        
+        if (word[0] == ' ' && word[1] == ' ' && word[2] == ' ' && word[3] == ' ') {
+            // Skip empty words or print as spaces? 
+            // Phase 1 printed char by char.
+            for (int j = 0; j < 4; ++j) outputFile << word[j];
+        } else {
+            for (int j = 0; j < 4; ++j) outputFile << word[j];
         }
-        flag[pos/10]=1;
-        itoa(pos,str,10);
-        if(pos/100==0)
-        {
-            M[PTR+kio][2]='0';
-             M[PTR+kio][3]=str[0];
-        }
-        else{
-                M[PTR+kio][2]=str[0];
-        M[PTR+kio][3]=str[1];
-        cout<<"Cnt3  "<<level<<endl;
-        }
-        getline(fin,line);
-        cout<<line<<"Line2"<<endl;
-        level++;
-        k=0;
-        for(i=0;i<line.size()/4;i++)
-        {
-            for(j=0;j<4;j++)
-            {
-                M[pos+i][j]=line[k];
-                k++;
-                if(line[k]=='H')
-                {
-                    check=1;
-                    M[pos+(i+1)][0]='H';
-                    M[pos+(i+1)][1]='0';
-                    M[pos+(i+1)][2]='0';
-                    M[pos+(i+1)][3]='0';
-                }
+    }
+    outputFile << endl;
+}
 
+void TERMINATE(int EM, int EM2) {
+    terminateFlag = true;
+    outputFile << "\nJOB ID: " << setfill('0') << setw(4) << pcb.jobID;
+    
+    auto printError = [&](int code) {
+        switch (code) {
+            case 0: outputFile << " - NO ERROR"; break;
+            case 1: outputFile << " - OUT OF DATA"; break;
+            case 2: outputFile << " - LINE LIMIT EXCEEDED"; break;
+            case 3: outputFile << " - TIME LIMIT EXCEEDED"; break;
+            case 4: outputFile << " - OPERATION CODE ERROR"; break;
+            case 5: outputFile << " - OPERAND ERROR"; break;
+            case 6: outputFile << " - INVALID PAGE FAULT"; break;
+        }
+    };
+
+    printError(EM);
+    if (EM2 != -1) {
+        printError(EM2);
+    }
+
+    outputFile << "\nIC: " << setw(2) << IC << "  IR: ";
+    for(int i=0; i<4; i++) outputFile << IR[i];
+    outputFile << "  TTC: " << pcb.TTC << "  LLC: " << pcb.LLC << endl;
+    outputFile << endl << endl;
+
+    if (debug) {
+        M.displayMemory();
+    }
+}
+
+// Interrupt handler (Decision Table)
+void MOS() {
+    if (TI == 0) {
+        if (SI == 1) { READ(); SI = 0; }
+        else if (SI == 2) { WRITE(); SI = 0; }
+        else if (SI == 3) { TERMINATE(0); SI = 0; }
+        else if (PI == 1) { TERMINATE(4); PI = 0; }
+        else if (PI == 2) { TERMINATE(5); PI = 0; }
+        else if (PI == 3) {
+            // Valid Page Fault check
+            string op = ""; op += IR[0]; op += IR[1];
+            if (op == "GD" || op == "SR") {
+                int va = getAddress();
+                int pageNum = va / 10;
+                int frame = ALLOCATE();
+                char newPte[4] = {' ', ' ', (char)((frame / 10) + '0'), (char)((frame % 10) + '0')};
+                M.write(PTR * 10 + pageNum, newPte);
+                PI = 0;
+                IC--; // Re-execute the instruction
+            } else {
+                TERMINATE(6); // Invalid Page Fault
+                PI = 0;
             }
         }
-
-    }
-    cout<<endl<<"MEMORY"<<endl;
-    for(i=0;i<300;i++)
-    {cout<<"["<<i<<"] = ";
-        for(j=0;j<4;j++)
-        {
-            cout<<M[i][j];
-
+    } else if (TI == 2) {
+        if (SI == 1) TERMINATE(3);
+        else if (SI == 2) { 
+            WRITE(); 
+            if (!terminateFlag) TERMINATE(3); 
         }
-        cout<<endl;
-    }
-}
-
-void AddMap()
-{
-    int add,pos;
-    char str[2];
-    RA = PTR+(VA/10);
-
-    if(M[RA][3]== '#')
-    {
-        cout<<"**** Page fault occured ****\n";
-
-
-
-        pos=(rand()%29)*10;
-        cout<<"POS1   "<<pos<<endl;
-        while(flag[pos/10] != 0 )
-        {
-        cout<<"in while pos"<<endl;
-        pos=(rand()%29)*10;
-        cout<<"POS2  "<<pos<<endl;
-        //cout<<"cnt2  "<<level<<endl;
-        }
-        flag[pos/10]=1;
-        itoa(pos,str,10);
-        if(pos/100==0)
-        {
-            M[RA][2]='0';
-            M[RA][3]=str[0];
-        }
-        else
-        {
-            M[RA][2]=str[0];
-            M[RA][3]=str[1];
-            //cout<<"cnt3  "<<level<<endl;
-        }
-
-        PI=3;
-    }
-
-    if( RA > PTR+10 )
-    {
-        //cout<<"OPERAND ERROR";
-
-        PI=2;
-        MOS();
-    }
-
-}
-
-void read()
-{
-    int no,i,j,k,z,x;
-
-    getline(fin,line);
-    cout<<"\nLine  :"<<line;
-    no=((M[RA][2]-48)*10)+(M[RA][3]-48);
-    no=no*10;
-    k=0;
-    for(i=0; k<=line.size()  ;i++)
-    {
-        for(j=0;j<4 && k<=line.size();j++)
-        {
-            cout<<"Count  :";
-            cout<<no+i<<endl<<j<<"\n";
-            M[no+i][j] = line[k];
-            k++;
-        }
-    }
-
-    for(i=0;i<300;i++)
-    {
-        cout<<"["<<i<<"] = ";
-        for(j=0;j<4;j++)
-        {
-            cout<<M[i][j];
-
-        }
-        cout<<endl;
-    }
-
-
-
-
-}
-
-void write()
-{
-
-    char buff[40];
-    cout<<"\n In Write : \n";
-    int no=0,i,j,k,z,x;
-    no=((M[RA][2]-48)*10)+(M[RA][3]-48);
-   // cout<<no<<"fgkjfdkjbfd"<<RA<<endl;
-    no=no*10;
-    k=0;
-    while(1)
-    {
-        for(i=0; i<4 ;i++)
-        {
-            if(M[no][i] == '_')
-                break;
-            buff[k] = M[no][i];
-            k++;
-        }
-        if(M[no][i] == '_')
-                break;
-        no++;
-    }
-    buff[k]='\0';
-    cout<<"\n Line is : "<<buff<<endl;
-    fout.write(buff,strlen(buff));
-    cout<<"program terminated normally";
-    fout<<endl<<"-----------------------------------------------------------------------------------"<<endl;
-    fout<<endl<<"program terminated normally"<<endl;
-
-
-
-}
-
-void MOS()
-{
-    if(PI==1)
-    {
-        cout<<"\n**** Opcode Error : ****\n**** Program terminated abnormally. ****\n\n";
-            fout<<"\n**** Opcode error : ****\n**** Program terminated abnormally. ****";
-            endprogram();
-    }
-    else if(PI==2)
-    {
-        cout<<"\n**** Operand Error : ****\n**** Program terminated abnormally. ****\n\n";
-            fout<<"\n**** Operand error : ****\n**** Program terminated abnormally. ****";
-            endprogram();
-    }
-
-
-    if(SI==3)
-        endprogram();
-    else if(SI==1)
-    {
-        if(TI==0)
-            read();
-        else if(TI==2)
-        {
-            cout<<"\n**** Time Limit Exceeded : ****\n**** Program terminated abnormally. sss****";
-            fout<<"\n**** Time Limit Exceeded : ****\n**** Program terminated abnormally. ****";
-            endprogram();
-        }
-       // else if(TI==1)
-    }
-    else if(SI==2)
-    {
-        cout<<"\nIN SI=2";
-        if(TI==0)
-        {
-            cout<<"\nIN TI=0";
-            write();
-        }
-        else if(TI==2)
-        {
-             cout<<"\nIN TI=0";
-            write();
-            cout<<"\n**** Time Limit Exceeded : ****\n**** Program terminated abnormally. ****";
-            fout<<"\n**** Time Limit Exceeded : ****\n**** Program terminated abnormally. ****";
-            endprogram();
-
-
-        }
-        else if(TI==1)
-        {
-            cout<<"\n**** Line Limit Exceeded : ****\n**** Program terminated abnormally. ****";
-            fout<<"\n**** Line Limit Exceeded : ****\n**** Program terminated abnormally. ****";
-            endprogram();
-        }
+        else if (SI == 3) TERMINATE(0);
+        else if (PI == 1) TERMINATE(3, 4);
+        else if (PI == 2) TERMINATE(3, 5);
+        else if (PI == 3) TERMINATE(3);
+        else TERMINATE(3);
+        TI = 0;
     }
 }
 
+// Fetch-Decode-Execute cycle (Slave Mode)
+void EXECUTEUSERPROGRAM() {
+    while (!terminateFlag) {
+        // Map IC to Real Address
+        int ra = ADDRESSMAP(IC);
+        if (PI != 0) {
+            MOS(); 
+            continue;
+        }
 
+        // Fetch
+        char word[4];
+        M.read(ra, word);
+        for (int i = 0; i < 4; ++i)
+            IR[i] = word[i];
+        IC++;
 
-void examine()
-{
-    char ch;
-    ch=IR[0];
-    //TI=0;
-    PI=0;
+        // Increment Time Counter
+        pcb.TTC++;
+        if (pcb.TTC >= pcb.TTL) TI = 2;
 
-    switch(ch)
+        // Check H first (no operand needed)
+        if (IR[0] == 'H') {
+            SI = 3; 
+            MOS();
+            continue;
+        }
 
-    {
-    case 'G':
-        cout<<"\nSI = "<<SI<<"  TI ="<<TI<<"  PI="<<PI<<endl;
-        cout<<"TTC = "<<TTC<<"  LLC="<<LLC<<endl;
+        // Decode operand for all other instructions
+        int va = getAddress();
+        if (PI != 0) { // Operand Error from getAddress
+            MOS();
+            continue;
+        }
 
-        if(IR[1] !='D')
-        {
-            PI=1;
+        int ra_op = ADDRESSMAP(va);
+        if (PI != 0) { // Page Fault or Operand Error
+            MOS();
+            continue;
+        }
+        
+        // Operation Code Check
+        string op = ""; op += IR[0]; op += IR[1];
+        if (op != "LR" && op != "SR" && op != "CR" && op != "BT" && op != "GD" && op != "PD") {
+            PI = 1; 
+            MOS();
+            continue;
+        }
+
+        if (IR[0] == 'L' && IR[1] == 'R')
+            M.read(ra_op, R);
+        else if (IR[0] == 'S' && IR[1] == 'R')
+            M.write(ra_op, R);
+        else if (IR[0] == 'C' && IR[1] == 'R') {
+            char temp[4];
+            M.read(ra_op, temp);
+            C = true;
+            for (int i = 0; i < 4; ++i)
+                if (R[i] != temp[i]) { C = false; break; }
+        }
+        else if (IR[0] == 'B' && IR[1] == 'T') {
+            if (C) IC = va;
+        }
+        else if (IR[0] == 'G' && IR[1] == 'D') {
+            SI = 1; 
+            MOS();
+        }
+        else if (IR[0] == 'P' && IR[1] == 'D') {
+            SI = 2; 
             MOS();
         }
 
-        else
-        {
-            TTC = TTC+2;
-            if(TTC <= ttl)
-            {
-                SI=1;
-                MOS();
-            }
-            else
-            {
-                TI=2;
-                MOS();
-            }
-            //read();
-        }
-        cout<<"\nSI = "<<SI<<"  TI ="<<TI<<"  PI="<<PI<<endl;
-        cout<<"TTC = "<<TTC<<"  LLC="<<LLC<<endl;
-        break;
-
-    case 'P':
-        SI=2;
-        cout<<"\nSI = "<<SI<<"  TI ="<<TI<<"  PI="<<PI<<endl;
-        cout<<"TTC = "<<TTC<<"  LLC="<<LLC<<endl;
-        if(IR[1] != 'D')
-        {
-            PI=1;
-            MOS();
-        }
-        else
-        {
-            LLC=LLC+1;
-            TTC=TTC+1;
-            cout<<LLC<<" :llc"<<endl;
-            cout<<TTC<<" :ttc"<<endl;
-            if(LLC < tll)
-            {
-                TI=0;
-                MOS();
-
-            }
-            if(TTC > ttl)
-            {
-                TI=1;
-                MOS();
-
-            }
-            else
-            {
-                SI=2;
-                MOS();
-            }
-            //write();
-        }
-        cout<<"\nTTC = "<<TTC<<"  LLC="<<LLC<<endl;
-        cout<<"SI = "<<SI<<"  TI ="<<TI<<"  PI="<<PI<<endl;
-        break;
-
-
-    case 'H':
-
-        SI=3;
-        MOS();
-        break;
+        if (TI != 0 && !terminateFlag) MOS();
     }
-
-
 }
 
+void STARTEXECUTION() {
+    IC = 0;
+    terminateFlag = false;
+    EXECUTEUSERPROGRAM();
+}
 
-void executeProgram()
-{
-    int no;
-    char a[3];
-    int i,j,k;
-    for(i=0;i<=kio;i++)
-    {
-            cout<<"PTR  "<<PTR<<endl;
-            a[0]=M[PTR+i][2];
-            a[1]=M[PTR+i][3];
-            a[2]='\0';
-            no=((a[0]-48)*10)+(a[1]-48);
-            cout<<endl<<"no  "<<no;
-            for(j=0;j<10;j++)
-            {
-                for(k=0;k<4;k++)
-                {
-                    IR[k]=M[(no*10)+j][k];
+// Loader: reads input, parses control cards, loads packed instructions via paging
+void LOAD() {
+    string line;
+    while (getline(inputFile, line)) {
+        line = stripCR(line);
+        if (line.empty()) continue;
+
+        if (line.substr(0, 4) == "$AMJ") {
+            // Reset VM state for new job
+            M.initialize();
+            for(int i=0; i<30; i++) blockUsed[i] = false;
+            IC = 0; C = false; SI = 0; PI = 0; TI = 0;
+            memset(IR, ' ', 4);
+            memset(R,  ' ', 4);
+
+            // Initialize PCB
+            pcb.jobID = stoi(line.substr(4, 4));
+            pcb.TTL = stoi(line.substr(8, 4));
+            pcb.TLL = stoi(line.substr(12, 4));
+            pcb.TTC = 0;
+            pcb.LLC = 0;
+
+            // Allocate block for Page Table
+            PTR = ALLOCATE();
+            for(int i=0; i<10; i++) {
+                char pte[4] = {'*', '*', '*', '*'};
+                M.write(PTR * 10 + i, pte);
+            }
+
+            cout << "[LOADER] New job: " << pcb.jobID << " TTL: " << pcb.TTL << " TLL: " << pcb.TLL << endl;
+        }
+        else if (line.substr(0, 4) == "$DTA") {
+            STARTEXECUTION();
+        }
+        else if (line.substr(0, 4) == "$END") {
+            cout << "[LOADER] Job " << pcb.jobID << " finished." << endl;
+        }
+        else {
+            // Program Card: Allocate a frame and update page table
+            int frame = ALLOCATE();
+            int pageNum = 0;
+            // Find first empty page table entry
+            for(int i=0; i<10; i++) {
+                char pte[4];
+                M.read(PTR * 10 + i, pte);
+                if(pte[0] == '*') {
+                    pageNum = i;
+                    char newPte[4] = {' ', ' ', (char)((frame / 10) + '0'), (char)((frame % 10) + '0')};
+                    M.write(PTR * 10 + i, newPte);
+                    break;
                 }
-                cout<<"IR  "<<IR<<endl;
-
-                VA=((IR[2]-48)*10)+(IR[3]-48);
-                AddMap();
-                examine();
-
             }
 
-            cout<<endl<<"A  "<<a<<endl;
-
-    }
-}
-
-void startExecution()
-{
-    IC=0;
-    executeProgram();
-}
-
-void init()
-{
-    int i,j;
-    PTR=(rand()%29)*10;
-    cout<<"PTR   "<<PTR<<endl;
-    for(i=0;i<30;i++)
-    {
-        flag[i]=0;
-    }
-    flag[PTR/10]=1;
-    for(i=0;i<300;i++)
-    {
-        for(j=0;j<4;j++)
-        {
-            M[i][j]='_';
-        }
-    }
-    for(i=PTR;i<PTR+10;i++)
-    {
-        for(j=0;j<4;j++)
-        {
-            M[i][j]='#';
-        }
-    }
-
-}
-
-void load()
-{
-    printf("IN LOAD\n");
-    int i,j,k;
-
-    while(fin)
-    {
-        cout<<"In while"<<endl;
-
-        getline(fin,line);
-        cout<<line<<"line1"<<endl;
-        if(line[0] =='$' && line[1]=='A' && line[2]=='M' && line[3]=='J')
-        {
-
-            SI=0;
-            TI=0;
-            TTC=0;LLC=0;
-            for(i=4,j=0;i<8;i++,j++)
-            {
-                pcb.job[j]=line[i];
-
+            // Load 10 words into the allocated frame
+            int len = (int)line.length();
+            int i = 0;
+            int m = 0;
+            while (i < len && m < 10) {
+                char word[4] = {' ', ' ', ' ', ' '};
+                if (line[i] == 'H') {
+                    word[0] = 'H';
+                    i += 1;
+                } else {
+                    for (int j = 0; j < 4 && (i + j) < len; ++j)
+                        word[j] = line[i + j];
+                    i += 4;
+                }
+                M.write(frame * 10 + m, word);
+                m++;
             }
-            for(i=8,j=0;i<12;i++,j++)
-            {
-                pcb.TTL[j]=line[i];
-            }
-            for(i=12,j=0;i<16;i++,j++)
-            {
-                pcb.TLL[j]=line[i];
-            }
-            ttl= (pcb.TTL[0]-48)*1000 + (pcb.TTL[1]-48)*100 + (pcb.TTL[2]-48)*10 + (pcb.TTL[3]-48);
-            tll= (pcb.TLL[0]-48)*1000 + (pcb.TLL[1]-48)*100 + (pcb.TLL[2]-48)*10 + (pcb.TLL[3]-48);
-            cout<<" TTL jdfjks = "<<ttl<<endl;
-            cout<<" TLL = "<<tll<<endl;
-            TTC=0;
-            LLC=0;
-            init();
-            allocate();
-        }
-        if(line[0] =='$' && line[1]=='D' && line[2]=='T' && line[3]=='A')
-        {
-                startExecution();
         }
     }
 }
 
+int main() {
+    srand(time(0));
+    inputFile.open("input.txt");
+    if (!inputFile.is_open()) {
+        cerr << "Error: Cannot open input.txt" << endl;
+        return 1;
+    }
 
+    outputFile.open("output.txt");
+    if (!outputFile.is_open()) {
+        cerr << "Error: Cannot open output.txt" << endl;
+        return 1;
+    }
 
-int main()
-{
-    fin.open("input.txt");
-    fout.open("output.txt");
-    load();
-     fin.close();
-    fout.close();
+    cout << "=== MOS Phase-2 (Stage-II) Simulation ===" << endl;
+    LOAD();
+    inputFile.close();
+    outputFile.close();
+    cout << "Simulation complete. Check output.txt" << endl;
+
     return 0;
 }
-
