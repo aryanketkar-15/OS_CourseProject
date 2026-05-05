@@ -245,6 +245,7 @@ void MOS() {
                 M.write(PTR * 10 + pageNum, newPte);
                 PI = 0;
                 IC--; // Re-execute the instruction
+                pcb.TTC -= 2; // Rollback TTC to prevent double counting
             } else {
                 TERMINATE(6); // Invalid Page Fault
                 PI = 0;

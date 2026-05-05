@@ -3,38 +3,41 @@ JOB ID: 0001 - OPERATION CODE ERROR
 IC: 01  IR: GS20  TTC: 1  LLC: 0
 
 
+NOT SAME                                
 
-JOB ID: 0002 - TIME LIMIT EXCEEDED
-IC: 04  IR: GD50  TTC: 16  LLC: 0
+JOB ID: 0002 - NO ERROR
+IC: 09  IR: H     TTC: 13  LLC: 1
 
 
 
-JOB ID: 0003 - TIME LIMIT EXCEEDED
-IC: 01  IR: GD10  TTC: 4  LLC: 0
+JOB ID: 0003 - LINE LIMIT EXCEEDED
+IC: 02  IR: PD10  TTC: 3  LLC: 1
 
 
 $                                       
 $   $                                   
 $   $   $                               
+$   $                                   
+$                                       
 
-JOB ID: 0004 - TIME LIMIT EXCEEDED
-IC: 11  IR: SR50  TTC: 26  LLC: 3
+JOB ID: 0004 - NO ERROR
+IC: 16  IR: H     TTC: 25  LLC: 5
 
 
 
 JOB ID: 0005 - OPERATION CODE ERROR
-IC: 02  IR: 9PD2  TTC: 5  LLC: 0
+IC: 02  IR: 9PD2  TTC: 3  LLC: 0
 
 
 
 JOB ID: 0006 - OUT OF DATA
-IC: 01  IR: GD20  TTC: 4  LLC: 0
+IC: 01  IR: GD20  TTC: 2  LLC: 0
 
 
 VALID FLT OK                            
 
 JOB ID: 0007 - NO ERROR
-IC: 03  IR: H     TTC: 6  LLC: 1
+IC: 03  IR: H     TTC: 4  LLC: 1
 
 
 
