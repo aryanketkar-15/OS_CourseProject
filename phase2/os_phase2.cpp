@@ -28,6 +28,7 @@ struct PCB {
     int TLL; // Total Line Limit
     int TTC; // Total Time Counter
     int LLC; // Line Limit Counter
+    bool validPageFaultHandled;
 } pcb;
 const int MEM_SIZE  = 300;
 const int WORD_SIZE = 4;
@@ -243,6 +244,11 @@ void MOS() {
                 int frame = ALLOCATE();
                 char newPte[4] = {' ', ' ', (char)((frame / 10) + '0'), (char)((frame % 10) + '0')};
                 M.write(PTR * 10 + pageNum, newPte);
+                if (!pcb.validPageFaultHandled) {
+                    outputFile << "Valid Page Fault Handled\n";
+                    pcb.validPageFaultHandled = true;
+                }
+                cout << "[MOS] Valid Page Fault Handled, allocated frame " << frame << " for page " << pageNum << endl;
                 PI = 0;
                 IC--; // Re-execute the instruction
             } else {
@@ -368,6 +374,7 @@ void LOAD() {
             pcb.TLL = stoi(line.substr(12, 4));
             pcb.TTC = 0;
             pcb.LLC = 0;
+            pcb.validPageFaultHandled = false;
 
             // Allocate block for Page Table
             PTR = ALLOCATE();

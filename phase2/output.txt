@@ -3,17 +3,20 @@ JOB ID: 0001 - OPERATION CODE ERROR
 IC: 01  IR: GS20  TTC: 1  LLC: 0
 
 
+Valid Page Fault Handled
 NOT SAME                                
 
 JOB ID: 0002 - NO ERROR
 IC: 09  IR: H     TTC: 13  LLC: 1
 
 
+Valid Page Fault Handled
 
 JOB ID: 0003 - LINE LIMIT EXCEEDED
 IC: 02  IR: PD10  TTC: 3  LLC: 1
 
 
+Valid Page Fault Handled
 $                                       
 $   $                                   
 $   $   $                               
@@ -22,16 +25,19 @@ JOB ID: 0004 - TIME LIMIT EXCEEDED
 IC: 12  IR: SR51  TTC: 16  LLC: 3
 
 
+Valid Page Fault Handled
 
 JOB ID: 0005 - OPERATION CODE ERROR
 IC: 02  IR: 9PD2  TTC: 3  LLC: 0
 
 
+Valid Page Fault Handled
 
 JOB ID: 0006 - OUT OF DATA
 IC: 01  IR: GD20  TTC: 2  LLC: 0
 
 
+Valid Page Fault Handled
 VALID FLT OK                            
 
 JOB ID: 0007 - NO ERROR
