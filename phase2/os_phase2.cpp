@@ -293,6 +293,14 @@ void EXECUTEUSERPROGRAM() {
             continue;
         }
 
+        // Operation Code Check
+        string op = ""; op += IR[0]; op += IR[1];
+        if (op != "LR" && op != "SR" && op != "CR" && op != "BT" && op != "GD" && op != "PD") {
+            PI = 1; 
+            MOS();
+            continue;
+        }
+
         // Decode operand for all other instructions
         int va = getAddress();
         if (PI != 0) { // Operand Error from getAddress
@@ -302,14 +310,6 @@ void EXECUTEUSERPROGRAM() {
 
         int ra_op = ADDRESSMAP(va);
         if (PI != 0) { // Page Fault or Operand Error
-            MOS();
-            continue;
-        }
-        
-        // Operation Code Check
-        string op = ""; op += IR[0]; op += IR[1];
-        if (op != "LR" && op != "SR" && op != "CR" && op != "BT" && op != "GD" && op != "PD") {
-            PI = 1; 
             MOS();
             continue;
         }
